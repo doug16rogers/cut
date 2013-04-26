@@ -206,7 +206,7 @@ cut_result_t cut_assert_memory(const char* file, int line, const void* proper, c
 
 /**
  * Default epsilon value for a comparision of doubles. The following
- * to assertions are made:
+ * two assertions are made:
  *
  *   actual >= proper * (1.0 - epsilon)
  *   actual <= proper * (1.0 + epsilon)
