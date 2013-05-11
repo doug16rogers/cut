@@ -39,6 +39,7 @@ test: all
 
 clean:
 	rm -f *~ *.o *.d $(TARGET) Makefile.depend core
+	rm -rf html
 
 ifneq ($(MAKECMDGOALS),clean)
 
@@ -49,6 +50,11 @@ SED_PATTERN = 's/\([^ ].*\)\.o[ :]*/\1.o \1.d : /g'
 
 %.d: %.cpp
 	$(CXX) -M $(DEFINES) $(INCLUDES) $< | sed $(SED_PATTERN) > $@
+
+.PHONY: doc
+
+doc:
+	doxygen doxygen.cfg
 
 # make will build the .d file and then include it.
 

@@ -1,3 +1,8 @@
+/**
+ * @file
+ * @brief Example suite consisting of simple tests.
+ */
+
 #include <time.h>
 #include <unistd.h>
 #include "cut.h"

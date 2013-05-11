@@ -1,3 +1,8 @@
+/**
+ * @file
+ * @brief Example unit test main program.
+ */
+
 #include <stdio.h>
 #include "cut.h"
 

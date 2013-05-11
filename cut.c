@@ -1,6 +1,9 @@
 /* Copyright (c) 2003, 2010 Doug Rogers under the terms of the MIT License. */
 /* See http://www.opensource.org/licenses/mit-license.html. */
 
+
+/** @file */
+
 #if defined(WIN32)
 #include <windows.h>
 #endif

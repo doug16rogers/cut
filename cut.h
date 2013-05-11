@@ -5,9 +5,11 @@
 #ifndef __cut_h__
 #define __cut_h__
 
+/** @file */
+
 /**
- * @file
- * C Unit Testing
+ * @mainpage
+ * C Unit Test
  *
  * Provides a unit testing framework for C.
  *
