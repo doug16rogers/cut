@@ -78,12 +78,15 @@ cut_result_t cut_add_test(const char* test_name, cut_test_func_t test_func);
 /**
  * In your main test program (that is, not a particular test suite), use this
  * macro to install a test suite with the given @a _name. Supply the name of
- * the suite without quotes. This results in a call to name() which must have
- * external linkage.
+ * the suite without quotes. This results in a call to the test suite's
+ * installer function, _name(), which must have external linkage.
+ *
+ * _name() should optionally use CUT_CONFIG_SUITE() and then a sequence of
+ * CUT_ADD_TEST() to add each of the suite's tests.
  */
 #define CUT_INSTALL_SUITE(_name)       \
   do {                                 \
-    extern void _name();               \
+    extern void _name(void);           \
     cut_install_suite(# _name, _name); \
   } while (0)
 
@@ -152,6 +155,32 @@ cut_result_t cut_run(int print_summary);
 #define CUT_FLAG_ALL    ((1 << CUT_RESULT_COUNT) - 1)
 
 /**
+ * Default name delimiter.
+ */
+#define CUT_NAME_DELIMITER_DEFAULT      "."
+
+/**
+ * The delimiter between suite and test names.
+ */
+extern const char* cut_name_delimiter;
+
+/**
+ * The default value used for whether or not to shorten suite and test names.
+ */
+#define CUT_SHORTEN_NAMES_DEFAULT       1
+
+/**
+ * Set this to remove "_test" or "test" from the end of suite and test names
+ * (not case-sensitive).
+ *
+ * For example, if you use CUT_INSTALL_SUITE(module_test) to install a module
+ * test, which in turn calls CUT_ADD_TEST(simple_test), then with this flag
+ * set the name that is reported will be "module.simple". Without the flag
+ * set the name will be "module_test.simple_test".
+ */
+extern int cut_shorten_names;
+
+/**
  * Bit flags indicating whether test names should be printed based on the
  * test result. Use CUT_RESULT_FLAG(_res) to set or clear the bits.
  */
@@ -182,6 +211,13 @@ cut_result_t cut_assert(const char* file,
                         int         condition,
                         const char* message);
 
+
+#if defined(GNUC)
+#define GNU_ATTRIBUTE(...)     __attribute(__VA_ARGS__)
+#else
+#define GNU_ATTRIBUTE(...)
+#endif
+
 /**
  * Allows freely formatted printing of the message associated with the
  * assertion.
@@ -190,7 +226,7 @@ cut_result_t cut_assertf(const char* file,
                          int         line,
                          int         condition,
                          const char* format,
-                         ...) __attribute__((format(printf,4,5)));
+                         ...) GNU_ATTRIBUTE((format(printf,4,5)));
 
 /**
  * Sets the type of an int, which should be large enough to hold a pointer,
@@ -206,7 +242,7 @@ cut_result_t cut_assert_memory(const char* file, int line, const void* proper, c
 
 /**
  * Default epsilon value for a comparision of doubles. The following
- * two assertions are made:
+ * to assertions are made:
  *
  *   actual >= proper * (1.0 - epsilon)
  *   actual <= proper * (1.0 + epsilon)
@@ -226,24 +262,47 @@ cut_result_t cut_assert_memory(const char* file, int line, const void* proper, c
     }                                 \
   } while (0)
 
-/**
- * These are arguments that are passed to all assertions.
+/*
+ * Most of the time you'll want to use CUT_ASSERT_xxx and not the macros in
+ * this section.
+ *
+ * Sometimes it is necessary to pass the file and line directly to the
+ * assertion. This is useful when you want to call a sub-function repeatedly
+ * to test some assertions, but when an error is reported you want it to
+ * indicate the line number of the calling function, not the assertion.
+ *
+ * The first two arguments are the file name and line number.
  */
-#define CUT_WHERE_ARGS    __FILE__, __LINE__
+#define CUT_FL_ASSERT_MESSAGE(_f,_l,_cond,_msg)     CUT_RETURN(cut_assert(_f,_l, ( _cond ), _msg ))
+#define CUT_FL_ASSERT(_f,_l,_cond)                  CUT_FL_ASSERT_MESSAGE(_f,_l, _cond, # _cond )
+#define CUT_FL_ASSERT_INT_IN(_f,_l,_lo,_hi,_a)      CUT_RETURN(cut_assert_int_in(_f,_l, (cut_int_t) (_lo), (cut_int_t) (_hi), (cut_int_t) (_a)))
+#define CUT_FL_ASSERT_INT(_f,_l,_p,_a)              CUT_FL_ASSERT_INT_IN(_f,_l, (_p), (_p), (_a))
+#define CUT_FL_ASSERT_POINTER(_f,_l,_p,_a)          CUT_RETURN(cut_assert_pointer(_f,_l, (_p), (_a)))
+#define CUT_FL_ASSERT_DOUBLE_IN(_f,_l,_lo,_hi,_a)   CUT_RETURN(cut_assert_double_in(_f,_l, (_lo), (_hi), (_a)))
+#define CUT_FL_ASSERT_DOUBLE_NEAR(_f,_l,_p,_a,_eps) CUT_FL_ASSERT_DOUBLE_IN(_f,_l, (_p) * (1.0 - (_eps)), (_p) * (1.0 + (_eps)), (_a))
+#define CUT_FL_ASSERT_DOUBLE(_f,_l,_p,_a)           CUT_FL_ASSERT_DOUBLE_NEAR(_f,_l, (_p), (_a), CUT_EPSILON)
+#define CUT_FL_ASSERT_DOUBLE_EXACT(_f,_l,_p,_a)     CUT_FL_ASSERT_DOUBLE_NEAR(_f,_l, (_p), (_a), 0.0)
+#define CUT_FL_ASSERT_STRING(_f,_l,_p,_a)           CUT_RETURN(cut_assert_string(_f,_l, (_p), (_a)))
+#define CUT_FL_ASSERT_MEMORY(_f,_l,_p,_a,_n)        CUT_RETURN(cut_assert_memory(_f,_l, (_p), (_a), (_n)))
+#define CUT_FL_ASSERT_NULL(_f,_l,_a)                CUT_FL_ASSERT(_f,_l, ((_a) == NULL))
+#define CUT_FL_ASSERT_NONNULL(_f,_l,_a)             CUT_FL_ASSERT(_f,_l, ((_a) != NULL))
 
-#define CUT_ASSERT_MESSAGE(_cond,_msg)     CUT_RETURN(cut_assert(CUT_WHERE_ARGS, ( _cond ), _msg ))
-#define CUT_ASSERT(_cond)                  CUT_ASSERT_MESSAGE(_cond, # _cond )
-#define CUT_ASSERT_INT_IN(_lo,_hi,_a)      CUT_RETURN(cut_assert_int_in(CUT_WHERE_ARGS, (cut_int_t) (_lo), (cut_int_t) (_hi), (cut_int_t) (_a)))
-#define CUT_ASSERT_INT(_p,_a)              CUT_ASSERT_INT_IN((_p), (_p), (_a))
-#define CUT_ASSERT_POINTER(_p,_a)          CUT_RETURN(cut_assert_pointer(CUT_WHERE_ARGS, (_p), (_a)))
-#define CUT_ASSERT_DOUBLE_IN(_lo,_hi,_a)   CUT_RETURN(cut_assert_double_in(CUT_WHERE_ARGS, (_lo), (_hi), (_a)))
-#define CUT_ASSERT_DOUBLE_NEAR(_p,_a,_eps) CUT_ASSERT_DOUBLE_IN((_p) * (1.0 - (_eps)), (_p) * (1.0 + (_eps)), (_a))
-#define CUT_ASSERT_DOUBLE(_p,_a)           CUT_ASSERT_DOUBLE_NEAR((_p), (_a), CUT_EPSILON)
-#define CUT_ASSERT_DOUBLE_EXACT(_p,_a)     CUT_ASSERT_DOUBLE_NEAR((_p), (_a), 0.0)
-#define CUT_ASSERT_STRING(_p,_a)           CUT_RETURN(cut_assert_string(CUT_WHERE_ARGS, (_p), (_a)))
-#define CUT_ASSERT_MEMORY(_p,_a,_n)        CUT_RETURN(cut_assert_memory(CUT_WHERE_ARGS, (_p), (_a), (_n)))
-#define CUT_ASSERT_NULL(_a)                CUT_ASSERT(((_a) == NULL))
-#define CUT_ASSERT_NONNULL(_a)             CUT_ASSERT(((_a) != NULL))
+/*
+ * Use these directly in your test function (good for most cases).
+ */
+#define CUT_ASSERT_MESSAGE(_cond,_msg)     CUT_FL_ASSERT_MESSAGE(__FILE__,__LINE__, (_cond),(_msg))
+#define CUT_ASSERT(_cond)                  CUT_FL_ASSERT(__FILE__,__LINE__, _cond)
+#define CUT_ASSERT_INT_IN(_lo,_hi,_a)      CUT_FL_ASSERT_INT_IN(__FILE__,__LINE__, (_lo),(_hi),(_a))
+#define CUT_ASSERT_INT(_p,_a)              CUT_FL_ASSERT_INT(__FILE__,__LINE__, (_p),(_a))
+#define CUT_ASSERT_POINTER(_p,_a)          CUT_FL_ASSERT_POINTER(__FILE__,__LINE__, (_p),(_a))
+#define CUT_ASSERT_DOUBLE_IN(_lo,_hi,_a)   CUT_FL_ASSERT_DOUBLE_IN(__FILE__,__LINE__, (_lo),(_hi),(_a))
+#define CUT_ASSERT_DOUBLE_NEAR(_p,_a,_eps) CUT_FL_ASSERT_DOUBLE_NEAR(__FILE__,__LINE__, (_p),(_a),(_eps))
+#define CUT_ASSERT_DOUBLE(_p,_a)           CUT_FL_ASSERT_DOUBLE(__FILE__,__LINE__, (_p),(_a))
+#define CUT_ASSERT_DOUBLE_EXACT(_p,_a)     CUT_FL_ASSERT_DOUBLE_EXACT(__FILE__,__LINE__, (_p),(_a))
+#define CUT_ASSERT_STRING(_p,_a)           CUT_FL_ASSERT_STRING(__FILE__,__LINE__, (_p),(_a))
+#define CUT_ASSERT_MEMORY(_p,_a,_n)        CUT_FL_ASSERT_MEMORY(__FILE__,__LINE__, (_p),(_a),(_n))
+#define CUT_ASSERT_NULL(_a)                CUT_FL_ASSERT_NULL(__FILE__,__LINE__, (_a))
+#define CUT_ASSERT_NONNULL(_a)             CUT_FL_ASSERT_NONNULL(__FILE__,__LINE__, (_a))
 
 /**
  * Use this to end the current test with the given result (just the short

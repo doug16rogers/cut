@@ -1,15 +1,41 @@
 /* Copyright (c) 2003, 2010 Doug Rogers under the terms of the MIT License. */
 /* See http://www.opensource.org/licenses/mit-license.html. */
 
+#if defined(WIN32)
+#include <windows.h>
+#endif
+
 #include <string.h>
 #include <ctype.h>
 #include <stdlib.h>
 #include <assert.h>
 #include <stdarg.h>
+#if !defined(WIN32)
 #include <sys/time.h>
+#endif
 #include <time.h>
 
 #include "cut.h"
+
+#if defined(GNUC)
+#define FIELD(_name)   ._name =
+#else
+#define FIELD(_name)
+#endif
+
+#if defined(WIN32)
+#define snprintf(_s,_n,...)   _snprintf_s(_s, _n, _TRUNCATE, __VA_ARGS__)
+#define strcasecmp(_s1,_s2)   _strnicmp(_s1, _s2, CUT_NAME_LEN_MAX)
+typedef          __int32  int32_t;
+typedef unsigned __int32 uint32_t;
+typedef          __int64  int64_t;
+typedef unsigned __int64 uint64_t;
+#endif
+
+/**
+ * A millisecond value.
+ */
+typedef int64_t msec_t;
 
 /**
  * Text name of result.
@@ -21,6 +47,22 @@ const char* cut_result_name[CUT_RESULT_COUNT] =
   "SKIP",
   "ERROR",
 };
+
+/**
+ * The delimiter between suite and test names.
+ */
+const char* cut_name_delimiter = CUT_NAME_DELIMITER_DEFAULT;
+
+/**
+ * Set this to remove "_test" or "test" from the end of suite and test names
+ * (not case-sensitive).
+ *
+ * For example, if you use CUT_INSTALL_SUITE(module_test) to install a module
+ * test, which in turn calls CUT_ADD_TEST(simple_test), then with this flag
+ * set the name that is reported will be "module.simple". Without the flag
+ * set the name will be "module_test.simple_test".
+ */
+int cut_shorten_names = CUT_SHORTEN_NAMES_DEFAULT;
 
 /**
  * Bit flags indicating whether test names should be printed based on the
@@ -156,10 +198,12 @@ typedef struct cut_s
  */
 static cut_t g_cut_info =
 {
-  .suite        = NULL,
-  .active_suite = NULL,
-  .assertions   = { 0, 0, 0, 0 },
-  .tests        = { 0, 0, 0, 0 },
+  FIELD(suite)              NULL,
+  FIELD(active_suite)       NULL,
+  FIELD(active_test)        NULL,
+  FIELD(assertions)         { 0, 0, 0, 0 },
+  FIELD(tests)              { 0, 0, 0, 0 },
+  FIELD(test_name_hanging)  0
 };   /* g_cut_info */
 
 /**
@@ -177,6 +221,28 @@ static cut_t* g_cut = &g_cut_info;
  * should be used by all strings passed to printable_diff_string().
  */
 #define PRINTABLE_DIFF_STRING_MAX_LEN  64
+
+/* ------------------------------------------------------------------------- */
+/**
+ * @return a monotonically increasing time in milliseconds for an unspecified
+ * epoch.
+ */
+static int64_t msec_time(void)
+{
+#if defined(WIN32)
+    const int64_t TEN_THOUSAND = 10000LL;     /* MS uses 100ns ticks since 1601-01-01. */
+    FILETIME       ftime;
+    ULARGE_INTEGER ul;
+    GetSystemTimeAsFileTime(&ftime);
+    ul.LowPart  = ftime.dwLowDateTime;
+    ul.HighPart = ftime.dwHighDateTime;
+    return ul.QuadPart / TEN_THOUSAND;
+#else
+    struct timeval tv = { 0, 0 };
+    gettimeofday(&tv, NULL);
+    return ((int64_t) tv.tv_sec) * 1000 + (tv.tv_usec / 1000);
+#endif
+}   /* msec_time() */
 
 /* ------------------------------------------------------------------------- */
 /**
@@ -262,6 +328,31 @@ static char* printable_diff_string(char* printable, const char* src, size_t len,
 }   /* printable_diff_string() */
 
 /* ------------------------------------------------------------------------- */
+static int remove_tail(char* name, const char* tail)
+{
+  const size_t name_length = strlen(name);
+  const size_t tail_length = strlen(tail);
+
+  if ((name_length > tail_length) &&
+      (0 == strcasecmp(&name[name_length - tail_length], tail)))
+  {
+    name[name_length - tail_length] = 0;
+    return 1;
+  }
+
+  return 0;
+}   /* remove_tail() */
+
+/* ------------------------------------------------------------------------- */
+static void shorten_name(char* name)
+{
+  if (cut_shorten_names)
+  {
+    if (!remove_tail(name, "_test")) remove_tail(name, "test" );
+  }
+}   /* shorten_name() */
+
+/* ------------------------------------------------------------------------- */
 cut_result_t cut_install_suite(const char* name, cut_install_func_t suite_install)
 {
   cut_suite_t* suite = NULL;
@@ -280,6 +371,7 @@ cut_result_t cut_install_suite(const char* name, cut_install_func_t suite_instal
   memset(suite, 0, sizeof(*suite));
   strncpy(suite->name, name, CUT_NAME_LEN_MAX);
   suite->name[CUT_NAME_LEN_MAX-1] = 0;
+  shorten_name(suite->name);
   g_cut->active_suite = suite;
 
   if (NULL == g_cut->suite)
@@ -368,8 +460,9 @@ cut_result_t cut_add_test(const char* test_name, cut_test_func_t test_func)
   }
 
   memset(test, 0, sizeof(*test));
-  snprintf(test->name, CUT_NAME_LEN_MAX, "%s.%s", suite->name, test_name);
+  snprintf(test->name, CUT_NAME_LEN_MAX, "%s%s%s", suite->name, cut_name_delimiter, test_name);
   test->name[CUT_NAME_LEN_MAX-1] = 0;
+  shorten_name(test->name);
   test->func = test_func;
   test->suite = suite;
 
@@ -764,7 +857,7 @@ void cut_print_summary(FILE* file, cut_result_t result)
 /* ------------------------------------------------------------------------- */
 static void cut_print_test_name(const char* name, struct tm* stamp)
 {
-  int i = 0;
+  size_t i = 0;
 
   assert(g_cut);
   assert(name);
@@ -808,12 +901,11 @@ cut_result_t cut_run(int print_summary)
 
     for (test = suite->test; test != NULL; test = test->next)
     {
-      struct timeval start_time;
-      struct timeval end_time;
-      time_t         stamp_time;
-      struct tm      stamp;
-      long           ms = 0;
-      cut_result_t   result = CUT_RESULT_PASS;
+      msec_t       start_time = 0;
+      time_t       stamp_time;
+      struct tm    stamp;
+      long         ms = 0;
+      cut_result_t result = CUT_RESULT_PASS;
 
       assert(test);
       assert(test->name);
@@ -829,9 +921,9 @@ cut_result_t cut_run(int print_summary)
 #else
       localtime_r(&stamp_time, &stamp);
 #endif
-      gettimeofday(&start_time, NULL);
-
       cut_print_test_name(test->name, &stamp);
+
+      start_time = msec_time();
 
       if (suite->init)
       {
@@ -880,9 +972,7 @@ cut_result_t cut_run(int print_summary)
         cut_print_test_name(test->name, &stamp);
       }
 
-      gettimeofday(&end_time, NULL);
-      ms = ((end_time.tv_sec  - start_time.tv_sec ) * 1000) +
-           ((end_time.tv_usec - start_time.tv_usec) / 1000);
+      ms = (long) (msec_time() - start_time);
       printf("%-5s (%02lu:%02lu.%03lu)\n", cut_result_name[result],
              ms / (60 * 1000), (ms / 1000) % 60, ms % 1000);
       g_cut->test_name_hanging = 0;
