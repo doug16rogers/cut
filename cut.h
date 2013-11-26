@@ -5,11 +5,9 @@
 #ifndef __cut_h__
 #define __cut_h__
 
-/** @file */
-
 /**
- * @mainpage
- * C Unit Test
+ * @file
+ * C Unit Testing
  *
  * Provides a unit testing framework for C.
  *
@@ -329,6 +327,21 @@ cut_result_t cut_assert_memory(const char* file, int line, const void* proper, c
  * Use this to end a test with a failure result.
  */
 #define CUT_TEST_FAIL()    CUT_TEST_END(FAIL)
+
+/*
+ * Wrapper functions:
+ */
+typedef cut_result_t (*cut_wrap_init_func_t)(cut_init_func_t init, void* data, void* wrapper_cookie);
+typedef void         (*cut_wrap_exit_func_t)(cut_exit_func_t exit, void* data, void* wrapper_cookie);
+typedef cut_result_t (*cut_wrap_test_func_t)(cut_test_func_t test, void* data, void* wrapper_cookie);
+
+/**
+ * This interface is intended to be used by the C++ wrapper, ccut.hh.
+ */
+void cut_set_wrapper(cut_wrap_init_func_t wrap_init,
+                     cut_wrap_exit_func_t wrap_exit,
+                     cut_wrap_test_func_t wrap_test,
+                     void* wrapper_cookie);
 
 #ifdef __cplusplus
 }

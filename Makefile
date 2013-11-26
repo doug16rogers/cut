@@ -3,11 +3,17 @@
 # $Id$
 
 TARGET = example_unit_test
+CC_TARGET = cc_example_unit_test
 
 OBJS = \
 	$(TARGET).o \
 	example_simple.o \
 	example_complex.o \
+	cut.o
+
+CC_OBJS = \
+	cc_example_unit_test.o \
+	ccut.o \
 	cut.o
 
 DEFINES  = $(PLATFORM_DEFINES)
@@ -24,21 +30,28 @@ CFLAGS   = -g -Wall -Werror $(PLATFORM_CFLAGS) $(DEFINES) $(INCLUDES)
 %.o : %.c
 	$(CC) -o $@ $(CFLAGS) -c $<
 
+%.o : %.cc
+	$(CXX) -o $@ $(CXXFLAGS) -c $<
+
 %.o : %.cpp
 	$(CXX) -o $@ $(CXXFLAGS) -c $<
 
 
-all: $(TARGET)
+all: $(TARGET) $(CC_TARGET)
 
 $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) -o $@ $^ $(LIBS) $(PLATFORM_LIBS)
 
+$(CC_TARGET): $(CC_OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $^ $(LIBS) $(PLATFORM_LIBS)
+
 test: all
 	./$(TARGET)
+	./$(CC_TARGET)
 
 
 clean:
-	rm -f *~ *.o *.d $(TARGET) Makefile.depend core
+	rm -f *~ *.o *.d $(TARGET) $(CC_TARGET) Makefile.depend core
 	rm -rf html
 
 ifneq ($(MAKECMDGOALS),clean)
@@ -47,6 +60,9 @@ SED_PATTERN = 's/\([^ ].*\)\.o[ :]*/\1.o \1.d : /g'
 
 %.d: %.c
 	$(CC) -M $(DEFINES) $(INCLUDES) $< | sed $(SED_PATTERN) > $@
+
+%.d: %.cc
+	$(CXX) -M $(DEFINES) $(INCLUDES) $< | sed $(SED_PATTERN) > $@
 
 %.d: %.cpp
 	$(CXX) -M $(DEFINES) $(INCLUDES) $< | sed $(SED_PATTERN) > $@
@@ -58,7 +74,7 @@ doc:
 
 # make will build the .d file and then include it.
 
-Makefile.depend: $(OBJS:.o=.d)
+Makefile.depend: $(OBJS:.o=.d) $(CC_OBJS:.o=.d)
 	@rm -f Makefile.depend
 	@for file in $^; do echo "include $$file" >> $@; done
 	@echo "Updating $@."

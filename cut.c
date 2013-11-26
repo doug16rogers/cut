@@ -1,9 +1,6 @@
 /* Copyright (c) 2003, 2010 Doug Rogers under the terms of the MIT License. */
 /* See http://www.opensource.org/licenses/mit-license.html. */
 
-
-/** @file */
-
 #if defined(WIN32)
 #include <windows.h>
 #endif
@@ -27,8 +24,10 @@
 #endif
 
 #if defined(WIN32)
-#define snprintf(_s,_n,...)   _snprintf_s(_s, _n, _TRUNCATE, __VA_ARGS__)
-#define strcasecmp(_s1,_s2)   _strnicmp(_s1, _s2, CUT_NAME_LEN_MAX)
+#define snprintf(_s,_n,...)         _snprintf_s(_s, _n, _TRUNCATE, __VA_ARGS__)
+#define vsnprintf(_s,_n,_fmt,_va)   vsnprintf_s(_s, _n, _TRUNCATE, _fmt, _va)
+#define strncpy(_d,_s,_n)           strncpy_s(_d,_n,_s,_TRUNCATE)
+#define strcasecmp(_s1,_s2)         _strnicmp(_s1, _s2, CUT_NAME_LEN_MAX)
 typedef          __int32  int32_t;
 typedef unsigned __int32 uint32_t;
 typedef          __int64  int64_t;
@@ -591,6 +590,29 @@ void cut_usage(FILE* file)
 }   /* cut_usage() */
 
 /* ------------------------------------------------------------------------- */
+static cut_wrap_init_func_t g_cut_wrap_init = NULL;
+static cut_wrap_exit_func_t g_cut_wrap_exit = NULL;
+static cut_wrap_test_func_t g_cut_wrap_test = NULL;
+static void* g_cut_wrap_cookie = NULL;
+
+/* ------------------------------------------------------------------------- */
+/**
+ * Sets the wrapper functions to be used when calling into a test suite. This
+ * is provided so that the C++ wrapper may catch exceptions and indicate an
+ * error or failure.
+ */
+void cut_set_wrapper(cut_wrap_init_func_t wrap_init,
+                     cut_wrap_exit_func_t wrap_exit,
+                     cut_wrap_test_func_t wrap_test,
+                     void* wrapper_cookie)
+{
+  g_cut_wrap_init = wrap_init;
+  g_cut_wrap_exit = wrap_exit;
+  g_cut_wrap_test = wrap_test;
+  g_cut_wrap_cookie = wrapper_cookie;
+}   /* cut_set_wrapper() */
+
+/* ------------------------------------------------------------------------- */
 /**
  * Registers the result of an assertion.
  * All of the other assertion functions and macros end up calling this.
@@ -930,7 +952,14 @@ cut_result_t cut_run(int print_summary)
 
       if (suite->init)
       {
-        result = suite->init(suite->data);
+        if (NULL != g_cut_wrap_init)
+        {
+          result = g_cut_wrap_init(suite->init, suite->data, g_cut_wrap_cookie);
+        }
+        else
+        {
+          result = suite->init(suite->data);
+        }
       }
 
       /*
@@ -945,7 +974,16 @@ cut_result_t cut_run(int print_summary)
         else
         {
           g_cut->active_test = test;
-          result = test->func(suite->data);
+
+          if (NULL != g_cut_wrap_test)
+          {
+            result = g_cut_wrap_test(test->func, suite->data, g_cut_wrap_cookie);
+          }
+          else
+          {
+            result = test->func(suite->data);
+          }
+
           g_cut->active_test = NULL;
         }
       }
@@ -963,7 +1001,14 @@ cut_result_t cut_run(int print_summary)
        */
       if (suite->exit)
       {
-        suite->exit(suite->data);
+        if (NULL != g_cut_wrap_exit)
+        {
+          g_cut_wrap_exit(suite->exit, suite->data, g_cut_wrap_cookie);
+        }
+        else
+        {
+          suite->exit(suite->data);
+        }
       }
 
       /*
