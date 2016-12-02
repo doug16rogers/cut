@@ -9,6 +9,11 @@
 typedef struct { FILE* file; } test_t;
 
 /**
+ * Set by main unit test to force a test failure.
+ */
+int g_complex_force_failure = 0;
+
+/**
  * Test initialization function. Test is meaningless without the input file,
  * so raise an ERROR if it doesn't exist.
  */
@@ -47,6 +52,9 @@ static cut_result_t product_test(test_t* test)
     int val = 0;
     while (fscanf(test->file, "%d", &val) == 1) {
         product *= (double) val;
+    }
+    if (g_complex_force_failure) {
+        product *= 1.0 + (2 * CUT_EPSILON);
     }
     CUT_ASSERT_DOUBLE(122522400, product);
     CUT_TEST_PASS();

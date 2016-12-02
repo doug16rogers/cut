@@ -13,7 +13,7 @@
  *
  * This is a simplification of my earlier version.
  *
- * An example is given in example_unit_test.c, example_simple.c, and
+ * Examples are provided in example_unit_test.c, example_simple.c and
  * example_complex.c. See those files.
  *
  * To build and run the example, use the following:
@@ -213,9 +213,9 @@ cut_result_t cut_assert(const char* file,
 
 
 #if defined(GNUC)
-#define GNU_ATTRIBUTE(...)     __attribute(__VA_ARGS__)
+#define CUT_GNU_ATTRIBUTE(...)  __attribute(__VA_ARGS__)
 #else
-#define GNU_ATTRIBUTE(...)
+#define CUT_GNU_ATTRIBUTE(...)
 #endif
 
 /**
@@ -226,7 +226,7 @@ cut_result_t cut_assertf(const char* file,
                          int         line,
                          int         condition,
                          const char* format,
-                         ...) GNU_ATTRIBUTE((format(printf,4,5)));
+                         ...) CUT_GNU_ATTRIBUTE((format(printf,4,5)));
 
 /**
  * Sets the type of an int, which should be large enough to hold a pointer,
@@ -242,7 +242,7 @@ cut_result_t cut_assert_memory(const char* file, int line, const void* proper, c
 
 /**
  * Default epsilon value for a comparision of doubles. The following
- * to assertions are made:
+ * two assertions are made:
  *
  *   actual >= proper * (1.0 - epsilon)
  *   actual <= proper * (1.0 + epsilon)
@@ -306,7 +306,7 @@ cut_result_t cut_assert_memory(const char* file, int line, const void* proper, c
 
 /**
  * Use this to end the current test with the given result (just the short
- * result name, not with CUT_RESULT_).
+ * result name, not with CUT_RESULT_). For example, CUT_TEST_END(PASS).
  */
 #define CUT_TEST_END(_res)                                              \
   do {                                                                  \

@@ -5,6 +5,7 @@
 #include "ccut.hh"
 
 #include <stdexcept>
+#include <string>
 
 // ----------------------------------------------------------------------------
 cut_result_t ccut_wrap_init(cut_init_func_t init, void* data, void* wrapper_cookie)

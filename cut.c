@@ -261,22 +261,22 @@ static const char* char_image(char c, char* image)
 
   image = (NULL == image) ? shared_image : image;
 
-  if (isprint(c))
-  {
-    image[0] = '\'';
-    image[1] = c;
-    image[2] = '\'';
-    image[3] = 0;
-    return image;
-  }
-
   switch (c)
   {
+  case '\'': strncpy(image, "'\\''", CHAR_IMAGE_MAX_LEN); break;
   case '\t': strncpy(image, "'\\t'", CHAR_IMAGE_MAX_LEN); break;
   case '\r': strncpy(image, "'\\r'", CHAR_IMAGE_MAX_LEN); break;
   case '\n': strncpy(image, "'\\n'", CHAR_IMAGE_MAX_LEN); break;
 
   default:
+    if (isprint(c))
+    {
+      image[0] = '\'';
+      image[1] = c;
+      image[2] = '\'';
+      image[3] = 0;
+      return image;
+    }
     if (c < 10) snprintf(image, CHAR_IMAGE_MAX_LEN - 1, "'\\%u'", (unsigned) (unsigned char) c);
     else        snprintf(image, CHAR_IMAGE_MAX_LEN - 1, "'\\x%02X'", (unsigned) (unsigned char) c);
   }
@@ -689,6 +689,7 @@ cut_result_t cut_assert_pointer(const char* file, int line, const void* proper, 
 /* ------------------------------------------------------------------------- */
 cut_result_t cut_assert_int_in(const char* file, int line, long long proper_lo, long long proper_hi, long long actual)
 {
+  const char* comparison_text = (actual < proper_lo) ? " (< Lower)" : ((actual > proper_hi) ? " (> Upper)" : "");
 #define MINGW 1
 #if defined(MINGW)
   if (proper_lo == proper_hi)
@@ -699,9 +700,11 @@ cut_result_t cut_assert_int_in(const char* file, int line, long long proper_lo, 
   }
   else
   {
-    return cut_assertf(file, line, (proper_lo <= actual) && (actual < proper_hi),
-                       "\n  Lower:  %10ld (0x%08lX)\n  Actual: %10ld (0x%08lX)\n  Upper:  %10ld (0x%08lX)",
-                       (long) proper_lo, (long) proper_lo, (long) actual, (long) actual, (long) proper_hi, (long) proper_hi);
+    return cut_assertf(file, line, (proper_lo <= actual) && (actual <= proper_hi),
+                       "\n  Lower:  %10ld (0x%08lX)\n  Actual: %10ld (0x%08lX)%s\n  Upper:  %10ld (0x%08lX)",
+                       (long) proper_lo, (long) proper_lo,
+                       (long) actual, (long) actual, comparison_text,
+                       (long) proper_hi, (long) proper_hi);
   }
 #else
   if (proper_lo == proper_hi)
@@ -712,9 +715,9 @@ cut_result_t cut_assert_int_in(const char* file, int line, long long proper_lo, 
   }
   else
   {
-    return cut_assertf(file, line, (proper_lo <= actual) && (actual < proper_hi),
-                       "\n  Lower:  %10lld (0x%08llX)\n  Actual: %10lld (0x%08llX)\n  Upper:  %10lld (0x%08llX)",
-                       proper_lo, proper_lo, actual, actual, proper_hi, proper_hi);
+    return cut_assertf(file, line, (proper_lo <= actual) && (actual <= proper_hi),
+                       "\n  Lower:  %10lld (0x%08llX)\n  Actual: %10lld (0x%08llX)%s\n  Upper:  %10lld (0x%08llX)",
+                       proper_lo, proper_lo, actual, actual, comparison_text, proper_hi, proper_hi);
   }
 #endif
 }   /* cut_assert_int_in() */
@@ -722,6 +725,7 @@ cut_result_t cut_assert_int_in(const char* file, int line, long long proper_lo, 
 /* ------------------------------------------------------------------------- */
 cut_result_t cut_assert_double_in(const char* file, int line, double proper_lo, double proper_hi, double actual)
 {
+  const char* comparison_text = (actual < proper_lo) ? " (< Lower)" : ((actual > proper_hi) ? " (> Upper)" : "");
   if (proper_lo == proper_hi)
   {
     return cut_assertf(file, line, proper_lo == actual,
@@ -731,8 +735,8 @@ cut_result_t cut_assert_double_in(const char* file, int line, double proper_lo, 
   else
   {
     return cut_assertf(file, line, (proper_lo <= actual) && (actual < proper_hi),
-                       "\n  Lower:  %18.15E (%g)\n  Actual: %18.15E (%g)\n  Upper:  %18.15E (%g)",
-                       proper_lo, proper_lo, actual, actual, proper_hi, proper_hi);
+                       "\n  Lower:  %18.15E (%g)\n  Actual: %18.15E (%g)%s\n  Upper:  %18.15E (%g)",
+                       proper_lo, proper_lo, actual, actual, comparison_text, proper_hi, proper_hi);
   }
 }   /* cut_assert_double_in() */
 
