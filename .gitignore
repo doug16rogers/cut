@@ -5,6 +5,7 @@
 *.pyc
 *.obj
 *.lib
+*.d
 *.depend
 
 # Compiled Dynamic libraries
