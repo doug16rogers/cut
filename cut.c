@@ -35,9 +35,9 @@ typedef unsigned __int64 uint64_t;
 #endif
 
 /**
- * A millisecond value.
+ * A microsecond value.
  */
-typedef int64_t msec_t;
+typedef uint64_t usec_t;
 
 /**
  * Text name of result.
@@ -78,6 +78,11 @@ int cut_print_test_flags = CUT_FLAG_PASS | CUT_FLAG_FAIL | CUT_FLAG_ERROR;
  * clear the bits.
  */
 int cut_print_case_flags = CUT_FLAG_FAIL | CUT_FLAG_ERROR;
+
+/**
+ * Whether to print assertion information from a test's init function.
+ */
+int cut_print_init_cases = CUT_PRINT_INIT_CASES_DEFAULT;
 
 /**
  * Maximum length of a suite or test name. Note that the test name includes
@@ -226,25 +231,40 @@ static cut_t* g_cut = &g_cut_info;
 
 /* ------------------------------------------------------------------------- */
 /**
- * @return a monotonically increasing time in milliseconds for an unspecified
- * epoch.
+ * @return a monotonically increasing time in microseconds since the first
+ * call.
  */
-static int64_t msec_time(void)
+static uint64_t usec_time(void)
 {
+    static int started = 0;
 #if defined(WIN32)
-    const int64_t TEN_THOUSAND = 10000LL;     /* MS uses 100ns ticks since 1601-01-01. */
     FILETIME       ftime;
     ULARGE_INTEGER ul;
+    static ULARGE_INTEGER start = {0};
     GetSystemTimeAsFileTime(&ftime);
     ul.LowPart  = ftime.dwLowDateTime;
     ul.HighPart = ftime.dwHighDateTime;
-    return ul.QuadPart / TEN_THOUSAND;
+    if (!started) {
+        started = 1;
+        start = ul;
+    }
+    ul.QuadPart -= start.QuadPart;
+    return ul.QuadPart / 10;
 #else
     struct timeval tv = { 0, 0 };
+    static uint64_t start = 0;
+    uint64_t now;
     gettimeofday(&tv, NULL);
-    return ((int64_t) tv.tv_sec) * 1000 + (tv.tv_usec / 1000);
+    now = (uint64_t) tv.tv_sec;
+    now = (1000000 * now) + tv.tv_usec;
+    if (!started) {
+        started = 1;
+        start = now;
+    }
+    now -= start;
+    return now;
 #endif
-}   /* msec_time() */
+}   /* usec_time() */
 
 /* ------------------------------------------------------------------------- */
 /**
@@ -532,6 +552,8 @@ cut_result_t cut_parse_command_line(int* argc, char* argv[])
     else if (strcmp(arg, "no-show-fail-cases" ) == 0) cut_print_case_flags &= ~CUT_FLAG_FAIL;
     else if (strcmp(arg, "no-show-skip-cases" ) == 0) cut_print_case_flags &= ~CUT_FLAG_SKIP;
     else if (strcmp(arg, "no-show-error-cases") == 0) cut_print_case_flags &= ~CUT_FLAG_ERROR;
+    else if (strcmp(arg, "show-init-cases"    ) == 0) cut_print_init_cases = 1;
+    else if (strcmp(arg, "no-show-init-cases" ) == 0) cut_print_init_cases = 0;
     else if (strcmp(arg, "show-tests"         ) == 0) cut_print_test_flags  = CUT_FLAG_ALL;
     else if (strcmp(arg, "show-pass-tests"    ) == 0) cut_print_test_flags |= CUT_FLAG_PASS;
     else if (strcmp(arg, "show-fail-tests"    ) == 0) cut_print_test_flags |= CUT_FLAG_FAIL;
@@ -577,12 +599,13 @@ void cut_usage(FILE* file)
 {
   fprintf(
     file,
-    "  -[no-]show-cases         Do [not] show all test assertions.\n"
-    "  -[no-]show-[type]-cases  Turn on showing of assertions for result <type>.\n"
-    "  -show-no-cases           Same as -no-show-cases; shows no assertions.\n"
-    "  -[no-]show-tests         Do [not] show all test results.\n"
-    "  -[no-]show-[type]-tests  Turn on showing of test results for <type>.\n"
-    "  -show-no-tests           Same as -no-show-tests; shows no test results.\n"
+    "  -[no-]show-cases              Do [not] show all test assertions.\n"
+    "  -[no-]show-[type]-cases       Turn on showing of assertions for result <type>.\n"
+    "  -show-no-cases                Same as -no-show-cases; shows no assertions.\n"
+    "  -[no-]show-init-cases         Do [not] show assertions from init functions.\n"
+    "  -[no-]show-tests              Do [not] show all test results.\n"
+    "  -[no-]show-[type]-tests       Turn on showing of test results for <type>.\n"
+    "  -show-no-tests                Same as -no-show-tests; shows no test results.\n"
     "\n"
     "  <type> - Result types may be pass, fail, skip, or error.\n"
     "\n"
@@ -625,17 +648,23 @@ cut_result_t cut_assertion_result(const char*  file,
   assert((result >= CUT_RESULT_FIRST) && (result <= CUT_RESULT_LAST));
   assert(NULL != g_cut);
 
-  g_cut->assertions[result]++;
-
-  if (cut_print_case_flags & CUT_RESULT_FLAG(result))
+  /*
+   * Do not include assertions in init function.
+   */
+  if ((NULL != g_cut->active_test) || cut_print_init_cases)
   {
-    if (g_cut->test_name_hanging)
-    {
-      printf("\n");
-      g_cut->test_name_hanging = 0;
-    }
+    g_cut->assertions[result]++;
 
-    printf("%s:%d: %-5s %s\n", file, line, cut_result_name[result], message);
+    if (cut_print_case_flags & CUT_RESULT_FLAG(result))
+    {
+      if (g_cut->test_name_hanging)
+      {
+        printf("\n");
+        g_cut->test_name_hanging = 0;
+      }
+
+      printf("%s:%d: %-5s %s\n", file, line, cut_result_name[result], message);
+    }
   }
 
   return result;
@@ -930,10 +959,10 @@ cut_result_t cut_run(int print_summary)
 
     for (test = suite->test; test != NULL; test = test->next)
     {
-      msec_t       start_time = 0;
+      usec_t       start_time = 0;
+      uint64_t     usec = 0;
       time_t       stamp_time;
       struct tm    stamp;
-      long         ms = 0;
       cut_result_t result = CUT_RESULT_PASS;
 
       assert(test);
@@ -952,7 +981,7 @@ cut_result_t cut_run(int print_summary)
 #endif
       cut_print_test_name(test->name, &stamp);
 
-      start_time = msec_time();
+      start_time = usec_time();
 
       if (suite->init)
       {
@@ -1024,9 +1053,9 @@ cut_result_t cut_run(int print_summary)
         cut_print_test_name(test->name, &stamp);
       }
 
-      ms = (long) (msec_time() - start_time);
-      printf("%-5s (%02lu:%02lu.%03lu)\n", cut_result_name[result],
-             ms / (60 * 1000), (ms / 1000) % 60, ms % 1000);
+      usec = usec_time() - start_time;
+      printf("%-5s (%02llu:%02llu.%06llu)\n", cut_result_name[result],
+             usec / (60 * 1000000), (usec / 1000000) % 60, usec % 1000000);
       g_cut->test_name_hanging = 0;
     }   /* for each test in the suite */
   }   /* for each suite */

@@ -4,7 +4,9 @@
  */
 
 #include <stdio.h>
+
 #include <stdexcept>
+#include <iostream>
 #include <string>
 
 #include "ccut.hh"
@@ -54,12 +56,15 @@ int main(int argc, char* argv[]) {
   cut_parse_command_line(&argc, argv);
 
   for (int i = 1; i < argc; ++i) {
-    if (std::string(argv[i]).substr(0, 2) == "-f") {
+    std::string arg(argv[i]);
+    if ((arg == "-f")|| (arg == "-force-failure")) {
       g_force_failure = true;
     } else {
-      fprintf(stderr, "unit_test: unknown option \"%s\"\n\n", argv[i]);
+      std::cerr << "unit_test: unknown option \"" << argv[i] << "\"\n"
+                << "\n"
+                << "  -f, -force-failure            Force a test failure due to exception.\n"
+                << "\n";
       cut_usage(stderr);
-      fprintf(stderr, "  -f, -force-failure        Force a test failure due to exception.\n");
       return 1;
     }
   }

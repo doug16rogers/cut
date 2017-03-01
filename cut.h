@@ -170,6 +170,12 @@ extern const char* cut_name_delimiter;
 #define CUT_SHORTEN_NAMES_DEFAULT       1
 
 /**
+ * The default value used for whether or not to print assertion information
+ * from initialization functions.
+ */
+#define CUT_PRINT_INIT_CASES_DEFAULT    0
+
+/**
  * Set this to remove "_test" or "test" from the end of suite and test names
  * (not case-sensitive).
  *
@@ -192,6 +198,14 @@ extern int cut_print_test_flags;
  * clear the bits.
  */
 extern int cut_print_case_flags;
+
+/**
+ * By default, assertions (cases) are not printed when the assertions arise
+ * from a test's initialization function. Set this to non-zero to enable
+ * printing (along with cut_print_case_flags above) of assertions from the
+ * initialization function.
+ */
+extern int cut_print_init_cases;
 
 /**
  * Registers the result of an assertion.
@@ -292,6 +306,7 @@ cut_result_t cut_assert_memory(const char* file, int line, const void* proper, c
  */
 #define CUT_ASSERT_MESSAGE(_cond,_msg)     CUT_FL_ASSERT_MESSAGE(__FILE__,__LINE__, (_cond),(_msg))
 #define CUT_ASSERT(_cond)                  CUT_FL_ASSERT(__FILE__,__LINE__, _cond)
+#define CUT_ASSERTF(_cond,...)             CUT_RETURN(cut_assertf(__FILE__,__LINE__,(_cond),__VA_ARGS__))
 #define CUT_ASSERT_INT_IN(_lo,_hi,_a)      CUT_FL_ASSERT_INT_IN(__FILE__,__LINE__, (_lo),(_hi),(_a))
 #define CUT_ASSERT_INT(_p,_a)              CUT_FL_ASSERT_INT(__FILE__,__LINE__, (_p),(_a))
 #define CUT_ASSERT_POINTER(_p,_a)          CUT_FL_ASSERT_POINTER(__FILE__,__LINE__, (_p),(_a))

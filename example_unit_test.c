@@ -17,9 +17,9 @@ static void usage(FILE* f, int exit_code) {
     fprintf(f, "\n");
     fprintf(f, "Usage: example_unit_test [options]\n");
     fprintf(f, "\n");
-    fprintf(f, "  -h, -help                Print this usage information.\n");
-    fprintf(f, "  -force-simple-failure    Force failure in example_simple.\n");
-    fprintf(f, "  -force-complex-failure   Force failure in example_complex.\n");
+    fprintf(f, "  -h, -help                     Print this usage information.\n");
+    fprintf(f, "  -force-simple-failure         Force failure in example_simple.\n");
+    fprintf(f, "  -force-complex-failure        Force failure in example_complex.\n");
     fprintf(f, "\n");
     cut_usage(f);
     exit(exit_code);
