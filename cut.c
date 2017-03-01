@@ -1054,7 +1054,7 @@ cut_result_t cut_run(int print_summary)
       }
 
       usec = usec_time() - start_time;
-      printf("%-5s (%02llu:%02llu.%06llu)\n", cut_result_name[result],
+      printf("%-5s %02llu:%02llu.%06llu\n", cut_result_name[result],
              usec / (60 * 1000000), (usec / 1000000) % 60, usec % 1000000);
       g_cut->test_name_hanging = 0;
     }   /* for each test in the suite */
