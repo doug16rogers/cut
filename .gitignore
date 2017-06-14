@@ -1,3 +1,7 @@
+# Specific targets for this project:
+cc_example_unit_test
+example_unit_test
+
 # Compiled Object files
 *.slo
 *.lo

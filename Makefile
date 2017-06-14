@@ -50,6 +50,7 @@ test: all
 	./$(CC_TARGET)
 
 
+.PHONY: clean
 clean:
 	rm -f *~ *.o *.d $(TARGET) $(CC_TARGET) Makefile.depend core
 	rm -rf html
@@ -68,7 +69,6 @@ SED_PATTERN = 's/\([^ ].*\)\.o[ :]*/\1.o \1.d : /g'
 	$(CXX) -M $(DEFINES) $(INCLUDES) $< | sed $(SED_PATTERN) > $@
 
 .PHONY: doc
-
 doc:
 	doxygen doxygen.cfg
 
@@ -82,4 +82,3 @@ Makefile.depend: $(OBJS:.o=.d) $(CC_OBJS:.o=.d)
 include Makefile.depend
 
 endif
-
