@@ -160,7 +160,7 @@ Basics of the Framework
 
 The framework provides three layers of testing:
 
-- Assertion - a comparison of a single value or operation producted by the
+- Assertion - a comparison of a single value or operation produced by the
   unit under test (UUT) with the value deemed to be proper by the test
   creator. An assertion might be an exact comparison or a range comparison,
   etc.
@@ -255,9 +255,10 @@ output would look like:
     14:37:49 complex.op ........................................ FAIL  00:00.000020
 ```
 
-Use CUT_FLM_ASSERT_DOUBLE_NEAR() allows the test assertion function to label
-the field that caused the failure. Without that ability it would be unclear
-which field was incorrect since the proper value is 3 for both of them.
+Use of CUT_FLM_ASSERT_DOUBLE_NEAR() allows the test assertion function to
+label the field that caused the failure. Without that ability it would be
+unclear which field was incorrect since the proper value is 3 for both of
+them.
 
 Using cut with C++
 ------------------
