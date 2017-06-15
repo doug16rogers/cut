@@ -7,8 +7,8 @@ CC_TARGET = cc_example_unit_test
 
 OBJS = \
 	$(TARGET).o \
-	example_simple.o \
-	example_complex.o \
+	example_test.o \
+	example_test_with_init.o \
 	cut.o
 
 CC_OBJS = \
@@ -37,13 +37,16 @@ CFLAGS   = -g -Wall -Werror $(PLATFORM_CFLAGS) $(DEFINES) $(INCLUDES)
 	$(CXX) -o $@ $(CXXFLAGS) -c $<
 
 
-all: $(TARGET) $(CC_TARGET)
+all: $(TARGET) $(CC_TARGET) complex_test
 
 $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) -o $@ $^ $(LIBS) $(PLATFORM_LIBS)
 
 $(CC_TARGET): $(CC_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LIBS) $(PLATFORM_LIBS)
+
+complex_test: complex_test.o cut.o
+	$(CC) $(CFLAGS) -o $@ $^
 
 test: all
 	./$(TARGET)
@@ -52,7 +55,7 @@ test: all
 
 .PHONY: clean
 clean:
-	rm -f *~ *.o *.d $(TARGET) $(CC_TARGET) Makefile.depend core
+	rm -f *~ *.o *.d $(TARGET) $(CC_TARGET) complex_test Makefile.depend core
 	rm -rf html
 
 ifneq ($(MAKECMDGOALS),clean)

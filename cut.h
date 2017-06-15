@@ -129,6 +129,25 @@ cut_result_t cut_parse_command_line(int* argc, char* argv[]);
 void cut_usage(FILE* file);
 
 /**
+ * Select suite.tests that include @a substring in their names to run.
+ *
+ * Initially all tests are selected to be run during cut_run(). Upon the
+ * first call of cut_include_test(), all non-matching tests are set NOT to
+ * run and from that point on tests are added to the list with this and each
+ * subsequent call to cut_include_test().
+ *
+ * @param substring - string to find within a full test name ("suite.test")
+ * for including that test when cut_run() is called.
+ *
+ * @return the number of tests selected to run by the given @a substring,
+ * even if they were already included by a previous call. The idea here is to
+ * indicate that the value of @a substring actually selects a test - not
+ * operator error. If this returns 0 then the caller should report an error
+ * that no tests are selected.
+ */
+int cut_include_test(const char* substring);
+
+/**
  * Run the entire suite - all tests that are currently enabled.
  *
  * @param print_summary - if non-zero, a summary will be printed to stdout.
@@ -248,11 +267,16 @@ cut_result_t cut_assertf(const char* file,
  */
 typedef long long cut_int_t;
 
-cut_result_t cut_assert_pointer(const char* file, int line, const void* proper, const void* actual);
-cut_result_t cut_assert_int_in(const char* file, int line, cut_int_t proper_lo, cut_int_t proper_hi, cut_int_t actual);
-cut_result_t cut_assert_double_in(const char* file, int line, double proper_lo, double proper_hi, double actual);
-cut_result_t cut_assert_string(const char* file, int line, const char* proper, const char* actual);
-cut_result_t cut_assert_memory(const char* file, int line, const void* proper, const void* actual, size_t n);
+cut_result_t cut_assert_pointer(const char* file, int line, const void* proper, const void* actual,
+                                const char* extra_message);
+cut_result_t cut_assert_int_in(const char* file, int line, cut_int_t proper_lo, cut_int_t proper_hi, cut_int_t actual,
+                               const char* extra_message);
+cut_result_t cut_assert_double_in(const char* file, int line, double proper_lo, double proper_hi, double actual,
+                                  const char* extra_message);
+cut_result_t cut_assert_string(const char* file, int line, const char* proper, const char* actual,
+                               const char* extra_message);
+cut_result_t cut_assert_memory(const char* file, int line, const void* proper, const void* actual, size_t n,
+                               const char* extra_message);
 
 /**
  * Default epsilon value for a comparision of doubles. The following
@@ -289,18 +313,33 @@ cut_result_t cut_assert_memory(const char* file, int line, const void* proper, c
  */
 #define CUT_FL_ASSERT_MESSAGE(_f,_l,_cond,_msg)     CUT_RETURN(cut_assert(_f,_l, ( _cond ), _msg ))
 #define CUT_FL_ASSERT(_f,_l,_cond)                  CUT_FL_ASSERT_MESSAGE(_f,_l, _cond, # _cond )
-#define CUT_FL_ASSERT_INT_IN(_f,_l,_lo,_hi,_a)      CUT_RETURN(cut_assert_int_in(_f,_l, (cut_int_t) (_lo), (cut_int_t) (_hi), (cut_int_t) (_a)))
+#define CUT_FL_ASSERT_INT_IN(_f,_l,_lo,_hi,_a)      CUT_RETURN(cut_assert_int_in(_f,_l, (cut_int_t) (_lo), (cut_int_t) (_hi), (cut_int_t) (_a), NULL))
 #define CUT_FL_ASSERT_INT(_f,_l,_p,_a)              CUT_FL_ASSERT_INT_IN(_f,_l, (_p), (_p), (_a))
-#define CUT_FL_ASSERT_POINTER(_f,_l,_p,_a)          CUT_RETURN(cut_assert_pointer(_f,_l, (_p), (_a)))
-#define CUT_FL_ASSERT_DOUBLE_IN(_f,_l,_lo,_hi,_a)   CUT_RETURN(cut_assert_double_in(_f,_l, (_lo), (_hi), (_a)))
+#define CUT_FL_ASSERT_POINTER(_f,_l,_p,_a)          CUT_RETURN(cut_assert_pointer(_f,_l, (_p), (_a), NULL))
+#define CUT_FL_ASSERT_DOUBLE_IN(_f,_l,_lo,_hi,_a)   CUT_RETURN(cut_assert_double_in(_f,_l, (_lo), (_hi), (_a), NULL))
 #define CUT_FL_ASSERT_DOUBLE_NEAR(_f,_l,_p,_a,_eps) CUT_FL_ASSERT_DOUBLE_IN(_f,_l, (_p) * (1.0 - (_eps)), (_p) * (1.0 + (_eps)), (_a))
 #define CUT_FL_ASSERT_DOUBLE(_f,_l,_p,_a)           CUT_FL_ASSERT_DOUBLE_NEAR(_f,_l, (_p), (_a), CUT_EPSILON)
 #define CUT_FL_ASSERT_DOUBLE_EXACT(_f,_l,_p,_a)     CUT_FL_ASSERT_DOUBLE_NEAR(_f,_l, (_p), (_a), 0.0)
-#define CUT_FL_ASSERT_STRING(_f,_l,_p,_a)           CUT_RETURN(cut_assert_string(_f,_l, (_p), (_a)))
-#define CUT_FL_ASSERT_MEMORY(_f,_l,_p,_a,_n)        CUT_RETURN(cut_assert_memory(_f,_l, (_p), (_a), (_n)))
+#define CUT_FL_ASSERT_STRING(_f,_l,_p,_a)           CUT_RETURN(cut_assert_string(_f,_l, (_p), (_a), NULL))
+#define CUT_FL_ASSERT_MEMORY(_f,_l,_p,_a,_n)        CUT_RETURN(cut_assert_memory(_f,_l, (_p), (_a), (_n), NULL))
 #define CUT_FL_ASSERT_NULL(_f,_l,_a)                CUT_FL_ASSERT(_f,_l, ((_a) == NULL))
 #define CUT_FL_ASSERT_NONNULL(_f,_l,_a)             CUT_FL_ASSERT(_f,_l, ((_a) != NULL))
 
+/*
+ * These include an extra message in addition to the file and line; they are
+ * intended for developing your own aggregate assertion checkers, where the
+ * message could be the name of a struct field, say.
+ */
+#define CUT_FLM_ASSERT_INT_IN(_f,_l,_lo,_hi,_a,_m)   CUT_RETURN(cut_assert_int_in(_f,_l, (cut_int_t) (_lo), (cut_int_t) (_hi), (cut_int_t) (_a), _m))
+#define CUT_FLM_ASSERT_INT(_f,_l,_p,_a,_m)           CUT_FLM_ASSERT_INT_IN(_f,_l, (_p), (_p), (_a), _m)
+#define CUT_FLM_ASSERT_POINTER(_f,_l,_p,_a,_m)       CUT_RETURN(cut_assert_pointer(_f,_l, (_p), (_a), _m))
+#define CUT_FLM_ASSERT_DOUBLE_IN(_f,_l,_lo,_hi,_a,_m)   CUT_RETURN(cut_assert_double_in(_f,_l, (_lo), (_hi), (_a), _m))
+#define CUT_FLM_ASSERT_DOUBLE_NEAR(_f,_l,_p,_a,_eps,_m) CUT_FLM_ASSERT_DOUBLE_IN(_f,_l, (_p) * (1.0 - (_eps)), (_p) * (1.0 + (_eps)), (_a), _m)
+#define CUT_FLM_ASSERT_DOUBLE(_f,_l,_p,_a,_m)        CUT_FLM_ASSERT_DOUBLE_NEAR(_f,_l, (_p), (_a), CUT_EPSILON, _m)
+#define CUT_FLM_ASSERT_DOUBLE_EXACT(_f,_l,_p,_a,_m)  CUT_FLM_ASSERT_DOUBLE_NEAR(_f,_l, (_p), (_a), 0.0, _m)
+#define CUT_FLM_ASSERT_STRING(_f,_l,_p,_a,_m)        CUT_RETURN(cut_assert_string(_f,_l, (_p), (_a), _m))
+#define CUT_FLM_ASSERT_MEMORY(_f,_l,_p,_a,_n,_m)     CUT_RETURN(cut_assert_memory(_f,_l, (_p), (_a), (_n), _m))
+    
 /*
  * Use these directly in your test function (good for most cases).
  */

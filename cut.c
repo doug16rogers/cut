@@ -1,21 +1,23 @@
 /* Copyright (c) 2003, 2010 Doug Rogers under the terms of the MIT License. */
 /* See http://www.opensource.org/licenses/mit-license.html. */
 
+#include "cut.h"
+
 #if defined(WIN32)
 #include <windows.h>
 #endif
 
-#include <string.h>
-#include <ctype.h>
-#include <stdlib.h>
 #include <assert.h>
+#include <ctype.h>
+#include <inttypes.h>
 #include <stdarg.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
 #if !defined(WIN32)
 #include <sys/time.h>
 #endif
 #include <time.h>
-
-#include "cut.h"
 
 #if defined(GNUC)
 #define FIELD(_name)   ._name =
@@ -94,6 +96,12 @@ typedef struct cut_test_s  cut_test_t;
 typedef struct cut_suite_s cut_suite_t;
 
 /**
+ * Flag for a test to be excluded from the run. It will report its result as
+ * SKIP.
+ */
+#define CUT_TEST_FLAG_EXCLUDE   0x0001
+
+/**
  * Test type.
  */
 struct cut_test_s
@@ -102,6 +110,11 @@ struct cut_test_s
    * The name includes the suite name ("suite.test").
    */
   char name[CUT_NAME_LEN_MAX];
+
+  /**
+   * Flags for this test, a bitwise OR of CUT_TEST_FLAG_xxx.
+   */
+  int flags;
 
   /**
    * Test function.
@@ -198,6 +211,12 @@ typedef struct cut_s
    * newlines.
    */
   int test_name_hanging;
+
+  /**
+   * Set when a call is made to cut_include_test() is called. Until that
+   * point, all tests are included.
+   */
+  int include_test_called;
 } cut_t;
 
 /**
@@ -210,7 +229,8 @@ static cut_t g_cut_info =
   FIELD(active_test)        NULL,
   FIELD(assertions)         { 0, 0, 0, 0 },
   FIELD(tests)              { 0, 0, 0, 0 },
-  FIELD(test_name_hanging)  0
+  FIELD(test_name_hanging)  0,
+  FIELD(include_test_called) 0
 };   /* g_cut_info */
 
 /**
@@ -613,6 +633,50 @@ void cut_usage(FILE* file)
 }   /* cut_usage() */
 
 /* ------------------------------------------------------------------------- */
+int cut_include_test(const char* substring) {
+  int rval = 0;
+
+  if (NULL == substring)
+  {
+    return 0;
+  }
+
+  /*
+   * If this is the first time it has been called, set all the tests to be
+   * excluded.
+   */
+  if (!g_cut_info.include_test_called)
+  {
+    g_cut_info.include_test_called = 1;
+
+    for (cut_suite_t* suite = g_cut_info.suite; NULL != suite; suite = suite->next)
+    {
+      for (cut_test_t* test = suite->test; NULL != test; test = test->next)
+      {
+        test->flags |= CUT_TEST_FLAG_EXCLUDE;
+      }
+    }
+  }
+
+  /*
+   * For each excluded test
+   */
+  for (cut_suite_t* suite = g_cut_info.suite; NULL != suite; suite = suite->next)
+  {
+    for (cut_test_t* test = suite->test; NULL != test; test = test->next)
+    {
+      if (NULL != strstr(test->name, substring))
+      {
+        rval++;
+        test->flags &= ~CUT_TEST_FLAG_EXCLUDE;
+      }
+    }
+  }
+
+  return rval;
+}   /* cut_include_test() */
+
+/* ------------------------------------------------------------------------- */
 static cut_wrap_init_func_t g_cut_wrap_init = NULL;
 static cut_wrap_exit_func_t g_cut_wrap_exit = NULL;
 static cut_wrap_test_func_t g_cut_wrap_test = NULL;
@@ -709,68 +773,109 @@ cut_result_t cut_assertf(const char* file,
   return cut_assert(file, line, condition, message);
 }   /* cut_assertf() */
 
+/**
+ * String used to separate the actual value from any extra message.
+ */
+#define CUT_EXTRA_MESSAGE_PAD   " - "
+
 /* ------------------------------------------------------------------------- */
-cut_result_t cut_assert_pointer(const char* file, int line, const void* proper, const void* actual)
+cut_result_t cut_assert_pointer(const char* file, int line, const void* proper, const void* actual,
+                                const char* extra_message)
 {
-  return cut_assertf(file, line, proper == actual, "\n  Proper: @%p\n  Actual: @%p", proper, actual);
+  return cut_assertf(file, line, proper == actual, "\n  Proper: @%p\n  Actual: @%p%s%s", proper, actual,
+                     (extra_message == NULL) ? "" : CUT_EXTRA_MESSAGE_PAD,
+                     (extra_message == NULL) ? "" : extra_message);
 }   /* cut_assert_pointer() */
 
 /* ------------------------------------------------------------------------- */
-cut_result_t cut_assert_int_in(const char* file, int line, long long proper_lo, long long proper_hi, long long actual)
+/**
+ * If @a lo greater than @a hi, swap them.
+ */
+#define CHECK_LO_HI(_type,_lo,_hi) \
+  do {                             \
+    if (_hi < _lo) {               \
+      _type _temp = _lo;           \
+      _lo = _hi;                   \
+      _hi = _temp;                 \
+    }                              \
+  } while (0)
+
+/* ------------------------------------------------------------------------- */
+cut_result_t cut_assert_int_in(const char* file, int line, long long proper_lo, long long proper_hi, long long actual,
+                               const char* extra_message)
 {
   const char* comparison_text = (actual < proper_lo) ? " (< Lower)" : ((actual > proper_hi) ? " (> Upper)" : "");
-#define MINGW 1
+#define MINGW 0
 #if defined(MINGW)
   if (proper_lo == proper_hi)
   {
     return cut_assertf(file, line, proper_lo == actual,
                        "\n  Proper: %10ld (0x%08lX)\n  Actual: %10ld (0x%08lX)",
-                       (long) proper_lo, (long) proper_lo, (long) actual, (long) actual);
+                       (long) proper_lo, (long) proper_lo, (long) actual, (long) actual,
+                       (extra_message == NULL) ? "" : CUT_EXTRA_MESSAGE_PAD,
+                       (extra_message == NULL) ? "" : extra_message);
   }
   else
   {
+    CHECK_LO_HI(long long, proper_lo, proper_hi);
     return cut_assertf(file, line, (proper_lo <= actual) && (actual <= proper_hi),
-                       "\n  Lower:  %10ld (0x%08lX)\n  Actual: %10ld (0x%08lX)%s\n  Upper:  %10ld (0x%08lX)",
+                       "\n  Lower:  %10ld (0x%08lX)\n  Actual: %10ld (0x%08lX)%s%s%s\n  Upper:  %10ld (0x%08lX)",
                        (long) proper_lo, (long) proper_lo,
                        (long) actual, (long) actual, comparison_text,
+                       (extra_message == NULL) ? "" : CUT_EXTRA_MESSAGE_PAD,
+                       (extra_message == NULL) ? "" : extra_message,
                        (long) proper_hi, (long) proper_hi);
   }
 #else
   if (proper_lo == proper_hi)
   {
     return cut_assertf(file, line, proper_lo == actual,
-                       "\n  Proper: %10lld (0x%08llX)\n  Actual: %10lld (0x%08llX)",
-                       proper_lo, proper_lo, actual, actual);
+                       "\n  Proper: %10lld (0x%08llX)\n  Actual: %10lld (0x%08llX)%s%s",
+                       proper_lo, proper_lo, actual, actual,
+                       (extra_message == NULL) ? "" : CUT_EXTRA_MESSAGE_PAD,
+                       (extra_message == NULL) ? "" : extra_message);
   }
   else
   {
+    CHECK_LO_HI(long long, proper_lo, proper_hi);
     return cut_assertf(file, line, (proper_lo <= actual) && (actual <= proper_hi),
-                       "\n  Lower:  %10lld (0x%08llX)\n  Actual: %10lld (0x%08llX)%s\n  Upper:  %10lld (0x%08llX)",
-                       proper_lo, proper_lo, actual, actual, comparison_text, proper_hi, proper_hi);
+                       "\n  Lower:  %10lld (0x%08llX)\n  Actual: %10lld (0x%08llX)%s%s%s\n  Upper:  %10lld (0x%08llX)",
+                       proper_lo, proper_lo, actual, actual, comparison_text,
+                       (extra_message == NULL) ? "" : CUT_EXTRA_MESSAGE_PAD,
+                       (extra_message == NULL) ? "" : extra_message,
+                       proper_hi, proper_hi);
   }
 #endif
 }   /* cut_assert_int_in() */
 
 /* ------------------------------------------------------------------------- */
-cut_result_t cut_assert_double_in(const char* file, int line, double proper_lo, double proper_hi, double actual)
+cut_result_t cut_assert_double_in(const char* file, int line, double proper_lo, double proper_hi, double actual,
+                                  const char* extra_message)
 {
-  const char* comparison_text = (actual < proper_lo) ? " (< Lower)" : ((actual > proper_hi) ? " (> Upper)" : "");
   if (proper_lo == proper_hi)
   {
     return cut_assertf(file, line, proper_lo == actual,
-                       "\n  Proper: %18.15E (%g)\n  Actual: %18.15E (%g)",
-                       proper_lo, proper_lo, actual, actual);
+                       "\n  Proper: %18.15E (%g)\n  Actual: %18.15E (%g)%s%s",
+                       proper_lo, proper_lo, actual, actual,
+                       (extra_message == NULL) ? "" : CUT_EXTRA_MESSAGE_PAD,
+                       (extra_message == NULL) ? "" : extra_message);
   }
   else
   {
-    return cut_assertf(file, line, (proper_lo <= actual) && (actual < proper_hi),
-                       "\n  Lower:  %18.15E (%g)\n  Actual: %18.15E (%g)%s\n  Upper:  %18.15E (%g)",
-                       proper_lo, proper_lo, actual, actual, comparison_text, proper_hi, proper_hi);
+    CHECK_LO_HI(double, proper_lo, proper_hi);
+    const char* comparison_text = (actual < proper_lo) ? " (< Lower)" : ((proper_hi < actual) ? " (> Upper)" : "");
+    return cut_assertf(file, line, (proper_lo <= actual) && (actual <= proper_hi),
+                       "\n  Lower:  %18.15E (%g)\n  Actual: %18.15E (%g)%s%s%s\n  Upper:  %18.15E (%g)",
+                       proper_lo, proper_lo, actual, actual, comparison_text,
+                       (extra_message == NULL) ? "" : CUT_EXTRA_MESSAGE_PAD,
+                       (extra_message == NULL) ? "" : extra_message,
+                       proper_hi, proper_hi);
   }
 }   /* cut_assert_double_in() */
 
 /* ------------------------------------------------------------------------- */
-cut_result_t cut_assert_string(const char* file, int line, const char* proper, const char* actual)
+cut_result_t cut_assert_string(const char* file, int line, const char* proper, const char* actual,
+                               const char* extra_message)
 {
   size_t plen = 0;
   size_t alen = 0;
@@ -782,15 +887,21 @@ cut_result_t cut_assert_string(const char* file, int line, const char* proper, c
    */
   if ((NULL == proper) && (NULL == actual))
   {
-    return cut_assert(file, line, 1, "\n  Proper: NULL\n  Actual: NULL");
+    return cut_assertf(file, line, 1, "\n  Proper: NULL\n  Actual: NULL%s%s",
+                       (extra_message == NULL) ? "" : CUT_EXTRA_MESSAGE_PAD,
+                       (extra_message == NULL) ? "" : extra_message);
   }
   else if (NULL == proper)
   {
-    return cut_assert(file, line, 0, "\n  Proper: NULL\n  Actual: non-NULL");
+    return cut_assertf(file, line, 0, "\n  Proper: NULL\n  Actual: non-NULL%s%s",
+                       (extra_message == NULL) ? "" : CUT_EXTRA_MESSAGE_PAD,
+                       (extra_message == NULL) ? "" : extra_message);
   }
   else if (NULL == actual)
   {
-    return cut_assert(file, line, 0, "\n  Proper: non-NULL\n  Actual: NULL");
+    return cut_assertf(file, line, 0, "\n  Proper: non-NULL\n  Actual: NULL%s%s",
+                       (extra_message == NULL) ? "" : CUT_EXTRA_MESSAGE_PAD,
+                       (extra_message == NULL) ? "" : extra_message);
   }
 
   plen = strlen(proper);
@@ -821,17 +932,24 @@ cut_result_t cut_assert_string(const char* file, int line, const char* proper, c
       char adiff[PRINTABLE_DIFF_STRING_MAX_LEN] = "";
 
       return cut_assertf(file, line, 0,
-                         "\n  Proper at [%d]: 0x%02X %3d %-6s \"%s\"\n  Actual at [%d]: 0x%02X %3d %-6s \"%s\")",
-                         (int) i, (unsigned) proper[i], (unsigned) proper[i], char_image(proper[i], pcimg), printable_diff_string(pdiff, proper, plen, i),
-                         (int) i, (unsigned) actual[i], (unsigned) actual[i], char_image(actual[i], acimg), printable_diff_string(adiff, actual, alen, i));
+                         "\n  Proper at [%d]: 0x%02X %3d %-6s \"%s\"\n  Actual at [%d]: 0x%02X %3d %-6s \"%s\"%s%s",
+                         (int) i, (unsigned) proper[i], (unsigned) proper[i], char_image(proper[i], pcimg),
+                         printable_diff_string(pdiff, proper, plen, i),
+                         (int) i, (unsigned) actual[i], (unsigned) actual[i], char_image(actual[i], acimg),
+                         printable_diff_string(adiff, actual, alen, i),
+                         (extra_message == NULL) ? "" : CUT_EXTRA_MESSAGE_PAD,
+                         (extra_message == NULL) ? "" : extra_message);
     }
   }
 
-  return cut_assertf(file, line, 1, "strings of length %d (0x%02X) match", (int) plen, (int) plen);
+  return cut_assertf(file, line, 1, "strings of length %d (0x%02X) match%s%s", (int) plen, (int) plen,
+                     (extra_message == NULL) ? "" : CUT_EXTRA_MESSAGE_PAD,
+                     (extra_message == NULL) ? "" : extra_message);
 }   /* cut_assert_string() */
 
 /* ------------------------------------------------------------------------- */
-cut_result_t cut_assert_memory(const char* file, int line, const void* proper, const void* actual, size_t n)
+cut_result_t cut_assert_memory(const char* file, int line, const void* proper, const void* actual, size_t n,
+                               const char* extra_message)
 {
   size_t i = 0;
   const unsigned char* p = (const unsigned char*) proper;
@@ -842,15 +960,21 @@ cut_result_t cut_assert_memory(const char* file, int line, const void* proper, c
    */
   if ((NULL == proper) && (NULL == actual))
   {
-    return cut_assert(file, line, 1, "\n  Proper: NULL\n  Actual: NULL");
+    return cut_assertf(file, line, 1, "\n  Proper: NULL\n  Actual: NULL%s%s",
+                       (extra_message == NULL) ? "" : CUT_EXTRA_MESSAGE_PAD,
+                       (extra_message == NULL) ? "" : extra_message);
   }
   else if (NULL == proper)
   {
-    return cut_assert(file, line, 0, "\n  Proper: NULL\n  Actual: non-NULL");
+    return cut_assertf(file, line, 0, "\n  Proper: NULL\n  Actual: non-NULL%s%s",
+                       (extra_message == NULL) ? "" : CUT_EXTRA_MESSAGE_PAD,
+                       (extra_message == NULL) ? "" : extra_message);
   }
   else if (NULL == actual)
   {
-    return cut_assert(file, line, 0, "\n  Proper: non-NULL\n  Actual: NULL");
+    return cut_assertf(file, line, 0, "\n  Proper: non-NULL\n  Actual: NULL%s%s",
+                       (extra_message == NULL) ? "" : CUT_EXTRA_MESSAGE_PAD,
+                       (extra_message == NULL) ? "" : extra_message);
   }
 
   for (i = 0; i < n; i++)
@@ -861,13 +985,17 @@ cut_result_t cut_assert_memory(const char* file, int line, const void* proper, c
       char acimg[CHAR_IMAGE_MAX_LEN] = "";
 
       return cut_assertf(file, line, 0,
-                         "\n  Proper at [%d]: 0x%02X (%d, %s)\n  Actual at [%d]: 0x%02X (%d, %s)",
+                         "\n  Proper at [%d]: 0x%02X (%d, %s)\n  Actual at [%d]: 0x%02X (%d, %s)%s%s",
                          (int) i, p[i], p[i], char_image(p[i], pcimg),
-                         (int) i, a[i], a[i], char_image(a[i], acimg));
+                         (int) i, a[i], a[i], char_image(a[i], acimg),
+                         (extra_message == NULL) ? "" : CUT_EXTRA_MESSAGE_PAD,
+                         (extra_message == NULL) ? "" : extra_message);
     }
   }
 
-  return cut_assertf(file, line, 1, "buffers of length %d (0x%02X) match", (int) n, (int) n);
+  return cut_assertf(file, line, 1, "buffers of length %d (0x%02X) match%s%s", (int) n, (int) n,
+                     (extra_message == NULL) ? "" : CUT_EXTRA_MESSAGE_PAD,
+                     (extra_message == NULL) ? "" : extra_message);
 }   /* cut_assert_memory() */
 
 /* ------------------------------------------------------------------------- */
@@ -964,9 +1092,12 @@ cut_result_t cut_run(int print_summary)
       time_t       stamp_time;
       struct tm    stamp;
       cut_result_t result = CUT_RESULT_PASS;
+      int          exclude_test = 0;
 
       assert(test);
       assert(test->name);
+
+      exclude_test = (test->flags & CUT_TEST_FLAG_EXCLUDE) != 0;
 
       if (suite->data)
       {
@@ -983,7 +1114,7 @@ cut_result_t cut_run(int print_summary)
 
       start_time = usec_time();
 
-      if (suite->init)
+      if (suite->init && !exclude_test)
       {
         if (NULL != g_cut_wrap_init)
         {
@@ -1000,7 +1131,7 @@ cut_result_t cut_run(int print_summary)
        */
       if (CUT_RESULT_PASS == result)
       {
-        if (NULL == test->func)
+        if ((NULL == test->func) || exclude_test)
         {
           result = CUT_RESULT_SKIP;
         }
@@ -1032,7 +1163,7 @@ cut_result_t cut_run(int print_summary)
       /*
        * Always run the finalization function if it exists.
        */
-      if (suite->exit)
+      if (suite->exit && !exclude_test)
       {
         if (NULL != g_cut_wrap_exit)
         {
@@ -1054,8 +1185,8 @@ cut_result_t cut_run(int print_summary)
       }
 
       usec = usec_time() - start_time;
-      printf("%-5s %02llu:%02llu.%06llu\n", cut_result_name[result],
-             usec / (60 * 1000000), (usec / 1000000) % 60, usec % 1000000);
+      printf("%-5s %02u:%02u.%06u\n", cut_result_name[result],
+             (int) (usec / (60 * 1000000)), (int) ((usec / 1000000) % 60), (int) (usec % 1000000));
       g_cut->test_name_hanging = 0;
     }   /* for each test in the suite */
   }   /* for each suite */

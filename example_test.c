@@ -27,7 +27,7 @@ static cut_result_t two(void)
     CUT_TEST_PASS();
 }
 
-static cut_result_t three(void)
+static cut_result_t three_internal_skip(void)
 {
     // Here's how you mark a test that's not yet ready:
     CUT_TEST_SKIP();
@@ -48,11 +48,11 @@ static cut_result_t fail_me(void)
     CUT_TEST_PASS();
 }
 
-void example_simple(void)
+void example_test(void)
 {
     CUT_ADD_TEST(one);
     CUT_ADD_TEST(two);
-    CUT_ADD_TEST(three);
+    CUT_ADD_TEST(three_internal_skip);
     CUT_ADD_TEST(four);
     CUT_ADD_TEST(fail_me);
 }
