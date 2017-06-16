@@ -65,7 +65,7 @@ static cut_result_t product_test(test_t* test)
  * test data blob to use, the test initializer (test_init()) and test
  * finalizer (test_exit()).
  */
-void example_test_with_init(void)
+void example_with_init_test(void)
 {
     CUT_CONFIG_SUITE(sizeof(test_t), test_init, test_exit);
     CUT_ADD_TEST(sum_test);

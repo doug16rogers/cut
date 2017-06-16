@@ -31,7 +31,7 @@ int main(int argc, char* argv[])
     cut_parse_command_line(&argc, argv);
 
     CUT_INSTALL_SUITE(example_test);
-    CUT_INSTALL_SUITE(example_test_with_init);
+    CUT_INSTALL_SUITE(example_with_init_test);
 
     for (i = 1; i < argc; ++i) {
         if ((0 == strcmp(argv[i], "-h")) || (0 == strcmp(argv[i], "-help"))) {

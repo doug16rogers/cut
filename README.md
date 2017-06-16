@@ -18,7 +18,7 @@ Learning to Use cut
 -------------------
 
 The best way to learn how to use Cut is to take a look at example_unit_test.c
-and its test suites in example_test.c and example_test_with_init.c.
+and its test suites in example_test.c and example_with_init_test.c.
 
 example_unit_test.c provides command line argument parsing and printing of
 usage information. It allows Cut to print and handle all the Cut-specific
@@ -34,11 +34,11 @@ assertion types. Note how the registration function, example_test(), does
 not need to perform a configuration step - by default no setup/teardown
 routines will be used.
 
-example_test_with_init.c shows how to create tests that require setup and
+example_with_init_test.c shows how to create tests that require setup and
 teardown steps around each test. CUT_CONFIG_SUITE() provides for specifying
 the size of the data buffer to be passed to the test and its setup and
 teardown functions. The buffer contents are zeroed and it is passed as a void
-pointer to the setup function (test_init() in example_test_with_init.c),
+pointer to the setup function (test_init() in example_with_init_test.c),
 which can then put items into the buffer as required. The test is then called
 with the same pointer. Finally, the teardown (test_exit()) function is
 called, also passing the buffer pointer. Note that the teardown function is

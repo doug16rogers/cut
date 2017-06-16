@@ -8,7 +8,7 @@ CC_TARGET = cc_example_unit_test
 OBJS = \
 	$(TARGET).o \
 	example_test.o \
-	example_test_with_init.o \
+	example_with_init_test.o \
 	cut.o
 
 CC_OBJS = \
