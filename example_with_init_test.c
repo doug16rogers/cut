@@ -6,6 +6,10 @@
 #include <stdio.h>
 #include "cut.h"
 
+#if defined(_WIN32)
+#define fscanf fscanf_s
+#endif
+
 typedef struct { FILE* file; } test_t;
 
 /**
@@ -19,7 +23,11 @@ int g_complex_force_failure = 0;
  */
 static cut_result_t test_init(test_t* test)
 {
+#if defined(_WIN32)
+    fopen_s(&test->file, "input-data.txt", "rt");
+#else
     test->file = fopen("input-data.txt", "rt");
+#endif
     CUT_ASSERT_MESSAGE(test->file != NULL, "missing \"input-data.txt\"");
     CUT_TEST_PASS();
 }

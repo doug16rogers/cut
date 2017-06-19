@@ -3,7 +3,7 @@
 
 #include "cut.h"
 
-#if defined(WIN32)
+#if defined(_WIN32)
 #include <windows.h>
 #endif
 
@@ -14,7 +14,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#if !defined(WIN32)
+#if !defined(_WIN32)
 #include <sys/time.h>
 #endif
 #include <time.h>
@@ -25,7 +25,7 @@
 #define FIELD(_name)
 #endif
 
-#if defined(WIN32)
+#if defined(_WIN32)
 #define snprintf(_s,_n,...)         _snprintf_s(_s, _n, _TRUNCATE, __VA_ARGS__)
 #define vsnprintf(_s,_n,_fmt,_va)   vsnprintf_s(_s, _n, _TRUNCATE, _fmt, _va)
 #define strncpy(_d,_s,_n)           strncpy_s(_d,_n,_s,_TRUNCATE)
@@ -257,7 +257,7 @@ static cut_t* g_cut = &g_cut_info;
 static uint64_t usec_time(void)
 {
     static int started = 0;
-#if defined(WIN32)
+#if defined(_WIN32)
     FILETIME       ftime;
     ULARGE_INTEGER ul;
     static ULARGE_INTEGER start = {0};
@@ -1105,7 +1105,9 @@ cut_result_t cut_run(int print_summary)
       }
 
       stamp_time = time(NULL);
-#if defined(MINGW)
+#if defined(_WIN32)
+      localtime_s(&stamp, &stamp_time);
+#elif defined(MINGW)
       stamp = *localtime(&stamp_time);
 #else
       localtime_r(&stamp_time, &stamp);

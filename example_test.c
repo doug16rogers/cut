@@ -3,8 +3,13 @@
  * @brief Example suite consisting of simple tests.
  */
 
-#include <time.h>
+#if defined(_WIN32)
+#include <windows.h>
+#else
 #include <unistd.h>
+#endif
+#include <time.h>
+
 #include "cut.h"
 
 int g_simple_force_failure = 0;
@@ -36,8 +41,12 @@ static cut_result_t three_internal_skip(void)
 static cut_result_t four(void)
 {
     // To see the time show up on the right:
+#if defined(_WIN32)
+    Sleep(1258);
+#else
     sleep(1);
     usleep(258000);
+#endif
     CUT_TEST_PASS();
 }
 
