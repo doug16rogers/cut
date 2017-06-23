@@ -48,11 +48,7 @@ partially acquired resources.
 Building the Examples
 ---------------------
 
-cut was originally written for Unix-like systems to be built with make. A
-Visual Studio project is simple to make - it's just two files (or four for
-C++).
-
-To build the examples, run 'make':
+To build the examples on Unix-like systems, run 'make':
 
 ```
     $ make
@@ -74,8 +70,10 @@ To build the examples, run 'make':
     g++  -o cc_example_unit_test cc_example_unit_test.o ccut.o cut.o  
 ```
 
-On Windows, plop cut.h and cut.c (and ccut.hh and ccut.cc if you want the C++
-wrappers) into a folder then create a new project from existing code.
+On Windows, bring up vs/cut.sln in Visual Studio 2015 and Build the
+solution. It will build both example_unit_test.exe and
+cc_example_unit_test.exe in the appropriate target directory (Debug, Release,
+x64/Debug, or x64/Release).
 
 Running the Examples
 --------------------
