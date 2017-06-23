@@ -292,12 +292,12 @@ cut_result_t cut_assert_memory(const char* file, int line, const void* proper, c
 /**
  * Examines the result of running @a _code and return
  */
-#define CUT_RETURN(_code)             \
-  do {                                \
-    cut_result_t result = _code ;     \
-    if (CUT_RESULT_PASS != result) {  \
-      return result;                  \
-    }                                 \
+#define CUT_RETURN(_code)                  \
+  do {                                     \
+    cut_result_t _cut_result = _code ;     \
+    if (CUT_RESULT_PASS != _cut_result) {  \
+      return _cut_result;                  \
+    }                                      \
   } while (0)
 
 /*
